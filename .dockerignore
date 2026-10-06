@@ -1,0 +1,10 @@
+data/
+.venv/
+notebooks/
+__pycache__/
+*.pyc
+.git/
+config/.env
+models/*
+!models/lolpred.joblib
+!models/state.joblib

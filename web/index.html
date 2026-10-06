@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LoL Win Predictor — beta</title>
+<style>
+  :root {
+    --bg: #0f1116; --panel: #171a21; --line: #272b36; --text: #e6e8ee;
+    --muted: #9aa1b1; --blue: #4c8dff; --red: #ff5d5d; --accent: #7c5cff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  form { display: flex; gap: 8px; flex-wrap: wrap; }
+  input[type=text] { flex: 1 1 380px; min-width: 0; padding: 11px 13px; border-radius: 8px;
+    border: 1px solid var(--line); background: #10131a; color: var(--text); font-size: 15px; }
+  button { padding: 11px 18px; border-radius: 8px; border: 0; cursor: pointer;
+    background: var(--accent); color: #fff; font-weight: 600; font-size: 15px; }
+  button:disabled { opacity: .55; cursor: default; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 18px; margin-top: 20px; }
+  .bar { display: flex; height: 34px; border-radius: 8px; overflow: hidden; margin: 6px 0 14px; }
+  .bar > div { display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px; color: #fff; }
+  .bar .b { background: var(--blue); } .bar .r { background: var(--red); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; }
+  td.b { color: var(--blue); } td.r { color: var(--red); }
+  .note { color: var(--muted); font-size: 12.5px; margin-top: 10px; }
+  .err { border-color: #5a2a2a; background: #1d1414; }
+  .kv { display: flex; gap: 18px; flex-wrap: wrap; color: var(--muted); font-size: 12.5px; }
+  code { background: #10131a; padding: 1px 5px; border-radius: 4px; }
+  .spin { display: inline-block; width: 13px; height: 13px; border: 2px solid #ffffff55;
+    border-top-color: #fff; border-radius: 50%; animation: s .7s linear infinite;
+    vertical-align: -2px; margin-right: 6px; }
+  @keyframes s { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>LoL Win Predictor <span style="color:var(--muted);font-weight:400">beta</span></h1>
+  <div class="sub">
+    EUW ranked solo/duo only. Prediction uses nothing but the ten summoners and their
+    champion picks — no live game state.
+  </div>
+
+  <form id="f">
+    <input id="t" type="text" autocomplete="off"
+           placeholder="Riot ID (Name#TAG) or u.gg profile link">
+    <button id="go" type="submit">Predict</button>
+  </form>
+  <div class="note">
+    The summoner must be <strong>in a game right now</strong>. First-time lookups fetch
+    each player's recent matches from Riot and can take a couple of minutes;
+    repeat lookups are fast.
+  </div>
+
+  <div id="out"></div>
+
+  <footer style="margin-top:40px;padding-top:16px;border-top:1px solid var(--line);
+                 color:var(--muted);font-size:12px;line-height:1.6">
+    <p>
+      This is a win-probability estimator for games already in progress. It does
+      not estimate, publish or reconstruct hidden matchmaking ratings, and it
+      reads only data Riot's API exposes for a live game.
+    </p>
+    <p>
+      Beta limits: EUW ranked solo/duo only, and a small number of predictions per
+      10 minutes because a development API key allows 100 requests every 2 minutes
+      while one prediction needs roughly 110.
+    </p>
+    <p>
+      This product is not endorsed by Riot Games and does not reflect the views or
+      opinions of Riot Games or anyone officially involved in producing or managing
+      Riot Games properties. Riot Games and all associated properties are
+      trademarks or registered trademarks of Riot Games, Inc.
+    </p>
+  </footer>
+</div>
+
+<script>
+const out = document.getElementById('out');
+const btn = document.getElementById('go');
+const pct = x => (100 * x).toFixed(1) + '%';
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+document.getElementById('f').addEventListener('submit', async e => {
+  e.preventDefault();
+  const target = document.getElementById('t').value.trim();
+  if (!target) return;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>Working';
+  out.innerHTML = '<div class="panel">Looking up the live game and gathering player history…</div>';
+  try {
+    const res = await fetch('/predict', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({target})
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      out.innerHTML = `<div class="panel err"><strong>Not predicted.</strong><br>${esc(data.detail || res.statusText)}</div>`;
+      return;
+    }
+    render(data);
+  } catch (err) {
+    out.innerHTML = `<div class="panel err">Request failed: ${esc(err.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Predict';
+  }
+});
+
+function render(d) {
+  const b = d.blue_win_probability, r = d.red_win_probability;
+  const rows = d.teams.map(p => `
+    <tr>
+      <td class="${p.team === 'blue' ? 'b' : 'r'}">${p.team}</td>
+      <td>${esc(p.name || '—')}</td>
+      <td>${p.champion_id}</td>
+      <td>${esc(p.inferred_role)}</td>
+      <td>${p.prior_games}</td>
+    </tr>`).join('');
+  const expl = (d.explanation || []).map(x => `
+    <tr><td>${esc(x.feature)}</td>
+        <td class="${x.favours === 'blue' ? 'b' : 'r'}">${esc(x.favours)}</td>
+        <td>${x.effect.toFixed(3)}</td></tr>`).join('');
+
+  out.innerHTML = `
+    <div class="panel">
+      <div class="bar">
+        <div class="b" style="width:${100 * b}%">${pct(b)} blue</div>
+        <div class="r" style="width:${100 * r}%">${pct(r)} red</div>
+      </div>
+      <div class="kv">
+        <span>game <code>${d.game_id}</code></span>
+        <span>${esc(d.platform)} · queue ${d.queue_id}</span>
+        <span>model ${esc(d.model)}</span>
+        <span>players with 10+ prior games — blue ${d.coverage.blue}, red ${d.coverage.red}</span>
+        <span>fetched now: ${d.history.fetched_from_riot}</span>
+      </div>
+      <p class="note">
+        Matchmaking balances teams on purpose, so honest pre-game predictions sit close
+        to even. Treat anything near 50% as "too close to call" rather than a weak signal.
+      </p>
+    </div>
+
+    <div class="panel">
+      <table><thead><tr><th>side</th><th>summoner</th><th>champ</th>
+        <th>inferred role</th><th>prior games</th></tr></thead>
+        <tbody>${rows}</tbody></table>
+      <p class="note">Roles are inferred from champions and player history — Riot does not
+        expose lane assignment before a game ends. Measured accuracy: 92.7%.</p>
+    </div>
+
+    ${expl ? `<div class="panel">
+      <table><thead><tr><th>strongest inputs</th><th>favours</th><th>effect</th></tr></thead>
+        <tbody>${expl}</tbody></table>
+    </div>` : ''}`;
+}
+</script>
+</body>
+</html>

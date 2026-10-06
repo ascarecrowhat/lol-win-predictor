@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+config/.env
+
+# The corpus is large and re-derivable from Riot; never commit it.
+data/
+
+# Experiment artefacts are disposable, but the two files the deployment image
+# needs are tiny (47 KB total) and must be in the repo, since the build host has
+# no corpus to regenerate them from.
+models/*
+!models/.gitkeep
+!models/lolpred.joblib
+!models/lolpred.json
+!models/state.joblib
+
+.ipynb_checkpoints/
+.pytest_cache/
+.DS_Store

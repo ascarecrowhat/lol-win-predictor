@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: lol-win-predictor
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: RIOT_API_KEY
+        sync: false          # set this in the Render dashboard, not in git
+      - key: RIOT_PLATFORM
+        value: euw1
+      - key: RIOT_REGION
+        value: europe
+      - key: APP_RATE_LIMITS
+        value: 20:1,100:120
+      - key: SERVE_DB_PATH
+        value: /tmp/cache.duckdb

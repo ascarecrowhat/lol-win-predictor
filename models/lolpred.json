@@ -1,0 +1,123 @@
+{
+  "trained_at": "2026-10-06T09:34:59+00:00",
+  "model": "logistic",
+  "results": {
+    "split": {
+      "rows_total": 124503,
+      "rows_train_raw": 87153,
+      "rows_train_augmented": 174306,
+      "rows_val": 12450,
+      "rows_test": 24900,
+      "min_covered": 0,
+      "augmented": true,
+      "blue_win_rate_train": 0.5089440409394972,
+      "blue_win_rate_test": 0.5026907630522088,
+      "patches": [
+        "16.18",
+        "16.19"
+      ],
+      "train_end": "2026-09-28 13:39:39.256000",
+      "val_end": "2026-09-29 22:24:08.338000",
+      "test_start": "2026-09-29 22:24:12.965000",
+      "test_end": "2026-10-04 02:31:00.442000"
+    },
+    "baseline": {
+      "log_loss": 0.6931471805599453,
+      "brier": 0.25,
+      "accuracy": 0.5026907630522088,
+      "auc": 0.5
+    },
+    "logistic": {
+      "log_loss": 0.6817409792786682,
+      "brier": 0.24435403248668291,
+      "accuracy": 0.5613654618473896,
+      "auc": 0.5861535603834297
+    },
+    "lightgbm": {
+      "log_loss": 0.682559250910261,
+      "brier": 0.24475548978549827,
+      "accuracy": 0.5618473895582329,
+      "auc": 0.5825919727447342
+    },
+    "lightgbm_vs_logistic": {
+      "mean_gain": -0.0008182716315927521,
+      "ci_low": -0.0016525350159597569,
+      "ci_high": 1.4264108727952497e-05,
+      "p_a_better": 0.0275
+    },
+    "top_features": {
+      "d_champ_role_winrate_mean": 280,
+      "d_style_duration_preference_mean": 221,
+      "d_champ_games_mean": 194,
+      "d_first_time_champ_mean": 190,
+      "d_champ_role_winrate_min": 179,
+      "d_style_team_damage_pct_mean": 176,
+      "d_style_kill_participation_mean": 171,
+      "d_style_time_spent_dead_mean": 168,
+      "d_style_max_cs_adv_lane_mean": 167,
+      "d_champ_role_winrate_max": 148,
+      "d_gold_per_min_max": 145,
+      "d_style_damage_taken_pct_mean": 143,
+      "d_champ_winrate_max": 143,
+      "d_style_turret_plates_mean": 140,
+      "d_champ_scaling_mean": 139
+    },
+    "calibration": {
+      "applied": false,
+      "val_log_loss_raw": 0.6848327629829194,
+      "val_log_loss_calibrated": 0.6867874690968628
+    },
+    "calibrated": {
+      "log_loss": 0.6817409792786682,
+      "brier": 0.24435403248668291,
+      "accuracy": 0.5613654618473896,
+      "auc": 0.5861535603834297
+    },
+    "ece_before": 0.006348552606667996,
+    "ece_after": 0.006348552606667996
+  },
+  "calibration_table": [
+    {
+      "bin": "0.20-0.30",
+      "n": 45,
+      "predicted": 0.2760474259682152,
+      "actual": 0.28888888888888886,
+      "gap": 0.012841462920673674
+    },
+    {
+      "bin": "0.30-0.40",
+      "n": 1895,
+      "predicted": 0.3714936003884276,
+      "actual": 0.37308707124010554,
+      "gap": 0.0015934708516779361
+    },
+    {
+      "bin": "0.40-0.50",
+      "n": 10651,
+      "predicted": 0.4578462022733496,
+      "actual": 0.4548868650830908,
+      "gap": -0.002959337190258815
+    },
+    {
+      "bin": "0.50-0.60",
+      "n": 10548,
+      "predicted": 0.5421575842708349,
+      "actual": 0.5499620781190747,
+      "gap": 0.00780449384823978
+    },
+    {
+      "bin": "0.60-0.70",
+      "n": 1719,
+      "predicted": 0.6283845003775096,
+      "actual": 0.6515415939499709,
+      "gap": 0.023157093572461318
+    },
+    {
+      "bin": "0.70-0.80",
+      "n": 42,
+      "predicted": 0.7182685372635177,
+      "actual": 0.7380952380952381,
+      "gap": 0.019826700831720445
+    }
+  ]
+}
