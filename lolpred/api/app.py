@@ -14,7 +14,7 @@ from collections import deque
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 from ..config import settings
@@ -125,6 +125,25 @@ def get_predictor() -> LivePredictor:
     return _predictor
 
 
+@app.exception_handler(Exception)
+def unhandled(request: Request, exc: Exception):
+    """Answer JSON on unexpected failures.
+
+    Without this, FastAPI returns a plain-text "Internal Server Error", so a
+    browser trying to parse the body reports a JSON syntax error and the real
+    cause never reaches anyone. The type and message are included because this is
+    a beta whose failures need to be diagnosable from the client.
+    """
+    log.exception("Unhandled error on %s", request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": f"Unexpected server error: {type(exc).__name__}: {exc}",
+            "hint": "Check the service logs for the full traceback.",
+        },
+    )
+
+
 @app.get("/health")
 def health() -> dict:
     model_dir = settings.model_dir
@@ -136,7 +155,26 @@ def health() -> dict:
         "state_present": (model_dir / "state.joblib").exists(),
         "key_present": bool(settings.api_key),
         "throttle": "on" if THROTTLE_ON else "off",
+        "artefacts_loadable": _artefacts_loadable(),
     }
+
+
+def _artefacts_loadable() -> dict:
+    """Try loading the pickles, since a version mismatch only bites at load."""
+    import joblib
+
+    out: dict[str, str] = {}
+    for name in ("state.joblib", "lolpred.joblib"):
+        path = settings.model_dir / name
+        if not path.exists():
+            out[name] = "missing"
+            continue
+        try:
+            joblib.load(path)
+            out[name] = "ok"
+        except Exception as exc:  # noqa: BLE001
+            out[name] = f"{type(exc).__name__}: {exc}"[:200]
+    return out
 
 
 @app.post("/predict")

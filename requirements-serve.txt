@@ -1,11 +1,17 @@
 # Serving only: no lightgbm, no shap, no crawler extras.
-requests>=2.31
-python-dotenv>=1.0
-duckdb>=1.0
-pandas>=2.1
-numpy>=1.26
-scipy>=1.11
-scikit-learn>=1.4
-joblib>=1.3
-fastapi>=0.110
-uvicorn[standard]>=0.29
+#
+# Versions are PINNED, not floated. The model and the state snapshot are pickles,
+# and unpickling across different numpy / scikit-learn versions is unsupported -
+# it fails at load time, which shows up as a 500 on the first prediction while
+# /health still reports healthy. These are the versions the artefacts were
+# produced with; re-pin them whenever the model is retrained.
+numpy==2.2.6
+scipy==1.15.3
+pandas==2.3.3
+scikit-learn==1.7.2
+joblib==1.6.0
+duckdb==1.5.6
+requests==2.32.3
+python-dotenv==1.0.1
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
