@@ -14,7 +14,7 @@ from collections import deque
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 
 from ..config import settings
@@ -199,6 +199,28 @@ def predict(req: PredictRequest, request: Request) -> dict:
         raise HTTPException(502, f"Riot API error: {exc}") from exc
     finally:
         PREDICT_LOCK.release()
+
+
+# Riot verifies ownership of the product URL by fetching a fixed plain-text file.
+# Served as a route rather than a static mount so the content type and the exact
+# body are guaranteed, and so the token can be rotated via the environment without
+# a redeploy. The double-slash variant is registered because Riot's instructions
+# give the path as "<base>//riot.txt", which would otherwise 404.
+def _verification_token() -> str:
+    token = os.getenv("RIOT_VERIFICATION_TOKEN")
+    if token:
+        return token.strip()
+    path = ROOT / "web" / "riot.txt"
+    return path.read_text(encoding="utf-8").strip() if path.exists() else ""
+
+
+@app.get("/riot.txt", response_class=PlainTextResponse)
+@app.get("//riot.txt", response_class=PlainTextResponse)
+def riot_verification() -> PlainTextResponse:
+    token = _verification_token()
+    if not token:
+        raise HTTPException(404, "No verification token configured")
+    return PlainTextResponse(token, media_type="text/plain")
 
 
 @app.get("/")
