@@ -122,7 +122,7 @@ function render(d) {
   const rows = d.teams.map(p => `
     <tr>
       <td class="${p.team === 'blue' ? 'b' : 'r'}">${p.team}</td>
-      <td>${esc(p.name || '—')}</td>
+      <td>${p.anonymous ? '<em style="color:var(--muted)">anonymised</em>' : esc(p.name || '—')}</td>
       <td>${p.champion_id}</td>
       <td>${esc(p.inferred_role)}</td>
       <td>${p.prior_games}</td>
@@ -144,6 +144,7 @@ function render(d) {
         <span>model ${esc(d.model)}</span>
         <span>players with 10+ prior games — blue ${d.coverage.blue}, red ${d.coverage.red}</span>
         <span>fetched now: ${d.history.fetched_from_riot}</span>
+        ${d.anonymous_players ? `<span>anonymised by Riot: ${d.anonymous_players}</span>` : ''}
       </div>
       <p class="note">
         Matchmaking balances teams on purpose, so honest pre-game predictions sit close
@@ -156,7 +157,10 @@ function render(d) {
         <th>inferred role</th><th>prior games</th></tr></thead>
         <tbody>${rows}</tbody></table>
       <p class="note">Roles are inferred from champions and player history — Riot does not
-        expose lane assignment before a game ends. Measured accuracy: 92.7%.</p>
+        expose lane assignment before a game ends. Measured accuracy: 92.7%.
+        ${d.anonymous_players ? `Riot anonymises ${d.anonymous_players} player(s) in this
+        game; they are treated as unknown and no attempt is made to identify them,
+        which lowers confidence.` : ''}</p>
     </div>
 
     ${expl ? `<div class="panel">

@@ -114,11 +114,24 @@ class LivePredictor:
             raise NotEligible("That summoner is not in a game right now.")
         platform = str(game.get("platformId", "")).upper()
         queue = int(game.get("gameQueueConfigId") or 0)
-        parts = [
-            {"puuid": p.get("puuid"), "champion_id": int(p.get("championId") or 0),
-             "team_id": int(p.get("teamId") or 0), "name": p.get("riotId") or p.get("summonerName")}
-            for p in game.get("participants", [])
-        ]
+        # Riot anonymises some participants: no puuid, and riotId holding the
+        # champion name as a placeholder. Riot's policy forbids identifying or
+        # analysing players the game deliberately hides, so they are carried as
+        # unknowns with a synthetic id that can never match any history, and no
+        # lookup is attempted for them.
+        parts = []
+        for idx, p in enumerate(game.get("participants", [])):
+            puuid = p.get("puuid")
+            anonymous = not puuid
+            parts.append(
+                {
+                    "puuid": puuid or f"anon:{game.get('gameId')}:{idx}",
+                    "champion_id": int(p.get("championId") or 0),
+                    "team_id": int(p.get("teamId") or 0),
+                    "name": None if anonymous else (p.get("riotId") or p.get("summonerName")),
+                    "anonymous": anonymous,
+                }
+            )
         live = LiveGame(int(game.get("gameId") or 0), platform, queue, parts)
 
         if platform not in self.allowed_platforms:
@@ -130,8 +143,13 @@ class LivePredictor:
             raise NotEligible(
                 f"Queue {queue} is not ranked solo/duo (420), which is all the model has seen."
             )
-        if len(parts) != 10 or any(not p["puuid"] for p in parts):
-            raise NotEligible(f"Expected 10 identified participants, got {len(parts)}.")
+        if len(parts) != 10:
+            raise NotEligible(f"Expected 10 participants, got {len(parts)}.")
+        if all(p["anonymous"] for p in parts):
+            raise NotEligible(
+                "Every participant in this game is anonymised by Riot, so there is no "
+                "player history to predict from."
+            )
         return live
 
     # -- history -----------------------------------------------------------
@@ -188,6 +206,8 @@ class LivePredictor:
 
             new_rows = []
             for puuid in puuids:
+                if puuid.startswith("anon:"):
+                    continue
                 for match_id, payload in self._fetch_history(puuid, depth.get(puuid, 0)):
                     try:
                         patch = validate(payload, SOLO_QUEUE_ID, (0, 0))
@@ -269,10 +289,12 @@ class LivePredictor:
         raw = float(self.model.predict_proba(frame)[:, 1][0])
         prob = float(np.clip(self.calibrator.predict([raw])[0], 0.01, 0.99))
 
+        anon = [p for p in live.participants if p.get("anonymous")]
         return {
             "game_id": live.game_id,
             "platform": live.platform,
             "queue_id": live.queue_id,
+            "anonymous_players": len(anon),
             "blue_win_probability": round(prob, 4),
             "red_win_probability": round(1 - prob, 4),
             "coverage": {"blue": coverage[100], "red": coverage[200]},
@@ -287,6 +309,7 @@ class LivePredictor:
                     "champion_id": r["champion_id"],
                     "inferred_role": r["position"],
                     "prior_games": state.history_depth(r["puuid"]),
+                    "anonymous": r["puuid"].startswith("anon:"),
                 }
                 for r in records
             ],
