@@ -33,8 +33,13 @@ _predictor: LivePredictor | None = None
 # away politely rather than exhaust the key and fail for everyone.
 PREDICT_LOCK = threading.Semaphore(1)
 GLOBAL_WINDOW_S = 600.0
+# Set DEMO_THROTTLE=off (or either limit to 0) while testing. Leave the defaults
+# on for anything public: one cold prediction is ~110 Riot requests against a key
+# that allows 100 every two minutes, so two concurrent visitors break it for both.
+THROTTLE_ON = os.getenv("DEMO_THROTTLE", "on").strip().lower() not in {"off", "0", "false", "no"}
 GLOBAL_MAX = int(os.getenv("MAX_PREDICTIONS_PER_10MIN", "6"))
 PER_IP_COOLDOWN_S = float(os.getenv("PER_IP_COOLDOWN_S", "300"))
+LOCK_WAIT_S = float(os.getenv("PREDICT_LOCK_WAIT_S", "5"))
 _recent: deque[float] = deque()
 _by_ip: dict[str, float] = {}
 _guard = threading.Lock()
@@ -48,12 +53,14 @@ def _client_ip(request: Request) -> str:
 
 
 def check_quota(request: Request) -> None:
+    if not THROTTLE_ON:
+        return
     ip = _client_ip(request)
     now = time.monotonic()
     with _guard:
         while _recent and now - _recent[0] > GLOBAL_WINDOW_S:
             _recent.popleft()
-        if len(_recent) >= GLOBAL_MAX:
+        if GLOBAL_MAX > 0 and len(_recent) >= GLOBAL_MAX:
             wait = int(GLOBAL_WINDOW_S - (now - _recent[0])) + 1
             raise HTTPException(
                 429,
@@ -63,7 +70,7 @@ def check_quota(request: Request) -> None:
                 headers={"Retry-After": str(wait)},
             )
         last = _by_ip.get(ip)
-        if last is not None and now - last < PER_IP_COOLDOWN_S:
+        if PER_IP_COOLDOWN_S > 0 and last is not None and now - last < PER_IP_COOLDOWN_S:
             wait = int(PER_IP_COOLDOWN_S - (now - last)) + 1
             raise HTTPException(
                 429,
@@ -94,6 +101,12 @@ def get_predictor() -> LivePredictor:
             raise HTTPException(
                 503, "No serving state snapshot - run `lolpred features --save-state`."
             )
+        if not settings.api_key:
+            raise HTTPException(
+                503,
+                "RIOT_API_KEY is not set on this deployment. Add it in the service "
+                "environment settings and redeploy.",
+            )
         _predictor = LivePredictor(
             client=RiotClient(
                 api_key=settings.require_key(),
@@ -121,6 +134,8 @@ def health() -> dict:
         "queue": settings.queue_id,
         "model_present": any(model_dir.glob("lolpred*.joblib")),
         "state_present": (model_dir / "state.joblib").exists(),
+        "key_present": bool(settings.api_key),
+        "throttle": "on" if THROTTLE_ON else "off",
     }
 
 
@@ -128,7 +143,7 @@ def health() -> dict:
 def predict(req: PredictRequest, request: Request) -> dict:
     check_quota(request)
     predictor = get_predictor()
-    if not PREDICT_LOCK.acquire(timeout=5):
+    if not PREDICT_LOCK.acquire(timeout=LOCK_WAIT_S):
         raise HTTPException(
             429, "Another prediction is in progress; the rate limit allows only one at a time.",
             headers={"Retry-After": "60"},
